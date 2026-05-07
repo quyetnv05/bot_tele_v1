@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1>Sản Phẩm</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('addModal').style.display='flex'">+ Thêm Sản Phẩm</button>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Sản Phẩm</th>
+                <th>Danh Mục</th>
+                <th>Giá</th>
+                <th>Tồn Kho</th>
+                <th>Thao Tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for prod in products %}
+            <tr>
+                <td>{{ prod.id }}</td>
+                <td>
+                    {{ prod.name }}
+                    {% if prod.is_hidden %}
+                    <span class="badge" style="background-color: #666; font-size: 0.7em; margin-left: 5px;">Đã Ẩn</span>
+                    {% endif %}
+                </td>
+                <td>{{ prod.category.name }}</td>
+                <td>{{ prod.price | int }}đ</td>
+                <td>
+                    {% set available = prod.accounts | selectattr("is_sold", "equalto", false) | list | length %}
+                    <span class="badge {% if available > 0 %}badge-success{% else %}badge-pending{% endif %}">
+                        {{ available }}
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <a href="/admin/accounts?product_id={{ prod.id }}" style="color: var(--primary); text-decoration: none;">Kho</a>
+                        <a href="#" onclick="document.getElementById('editModal{{ prod.id }}').style.display='flex'" style="color: #f39c12; text-decoration: none;">Sửa</a>
+                        <a href="/admin/products/{{ prod.id }}/toggle-visibility" {% if prod.is_hidden %}style="color: #2ecc71; text-decoration: none;"{% else %}style="color: #e74c3c; text-decoration: none;"{% endif %}>
+                            {% if prod.is_hidden %}Hiện{% else %}Ẩn{% endif %}
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            
+            <!-- Edit Modal -->
+            <div id="editModal{{ prod.id }}" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; z-index:1000;">
+                <div class="card" style="width:100%; max-width:500px;">
+                    <h2>Sửa Sản Phẩm</h2>
+                    <form action="/admin/products/{{ prod.id }}/edit" method="post">
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Tên Sản Phẩm</label>
+                            <input type="text" name="name" value="{{ prod.name }}" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Danh Mục</label>
+                            <select name="category_id" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                                {% for cat in categories %}
+                                <option value="{{ cat.id }}" {% if cat.id == prod.category_id %}selected{% endif %}>{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Giá Gốc Tham Khảo (VNĐ)</label>
+                            <input type="number" name="price" value="{{ prod.price | int }}" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                        </div>
+                        {% if prod.is_partner %}
+                        <div style="margin-bottom:1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem;">
+                            <h3 style="margin-top:0; font-size:1rem;">Cấu hình giá bán (Đối tác)</h3>
+                            <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Chế độ giá</label>
+                            <select name="price_mode" onchange="togglePriceMode(this, {{prod.id}})" style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box; margin-bottom:1rem;">
+                                <option value="auto" {% if prod.price_mode == 'auto' %}selected{% endif %}>Tự động (+%)</option>
+                                <option value="manual" {% if prod.price_mode == 'manual' %}selected{% endif %}>Giá cố định</option>
+                            </select>
+                            
+                            <div id="auto_price_div_{{prod.id}}" style="display: {% if prod.price_mode == 'manual' %}none{% else %}block{% endif %};">
+                                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Lợi nhuận cộng thêm (%)</label>
+                                <input type="number" step="0.1" name="markup_percent" value="{{ prod.markup_percent or 10 }}" style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                            </div>
+                            
+                            <div id="manual_price_div_{{prod.id}}" style="display: {% if prod.price_mode != 'manual' %}none{% else %}block{% endif %};">
+                                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Giá bán cố định (VNĐ)</label>
+                                <input type="number" name="manual_price" value="{{ prod.manual_price or prod.price | int }}" style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div style="margin-bottom:1.5rem;">
+                            <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Mô Tả</label>
+                            <textarea name="description" style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box; min-height:100px;">{{ prod.description or '' }}</textarea>
+                        </div>
+                        <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                            <button type="button" class="btn" onclick="document.getElementById('editModal{{ prod.id }}').style.display='none'" style="background:var(--border); color:white;">Hủy</button>
+                            <button type="submit" class="btn btn-primary">Lưu Thay Đổi</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div id="addModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; z-index:1000;">
+    <div class="card" style="width:100%; max-width:500px;">
+        <h2>Thêm Sản Phẩm Mới</h2>
+        <form action="/admin/products" method="post">
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Tên Sản Phẩm</label>
+                <input type="text" name="name" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Danh Mục</label>
+                <select name="category_id" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Giá (VNĐ)</label>
+                <input type="number" name="price" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:1.5rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Mô Tả</label>
+                <textarea name="description" style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box; min-height:100px;"></textarea>
+            </div>
+            <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                <button type="button" class="btn" onclick="document.getElementById('addModal').style.display='none'" style="background:var(--border); color:white;">Hủy</button>
+                <button type="submit" class="btn btn-primary">Lưu Sản Phẩm</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function togglePriceMode(select, id) {
+    const mode = select.value;
+    document.getElementById('auto_price_div_' + id).style.display = mode === 'auto' ? 'block' : 'none';
+    document.getElementById('manual_price_div_' + id).style.display = mode === 'manual' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

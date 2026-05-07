@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Broadcast - Shop Admin{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <h1>Gửi thông báo hàng loạt</h1>
+    <p style="color: var(--text-muted); margin-bottom: 2rem;">Gửi tin nhắn đến toàn bộ người dùng đã từng nhắn tin với Bot. Hỗ trợ định dạng HTML.</p>
+
+    {% if msg %}
+    <div style="background: #e7f3ff; color: #007bff; padding: 1rem; border-radius: 0.5rem; margin-bottom: 2.5rem;">
+        {{ msg }}
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <form action="/admin/broadcast" method="POST">
+            <div class="form-group">
+                <label>Nội dung tin nhắn</label>
+                <textarea name="message" rows="8" placeholder="VD: <b>Thông báo:</b> Shop vừa nhập thêm 500 tài khoản ChatGPT Plus giá cực rẻ! Mời ae múc ngay." required style="width: 100%; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; font-family: inherit;"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="return confirm('Bạn có chắc muốn gửi tin nhắn này đến TẤT CẢ người dùng?')">Gửi ngay</button>
+        </form>
+    </div>
+    
+    <div class="card" style="margin-top: 2rem; background: #fff9db; border: 1px solid #fab005;">
+        <h4 style="margin-top: 0; color: #e67e22;">💡 Lưu ý:</h4>
+        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: #5c5c5c;">
+            <li>Sử dụng thẻ <code>&lt;b&gt;text&lt;/b&gt;</code> để viết đậm.</li>
+            <li>Sử dụng thẻ <code>&lt;i&gt;text&lt;/i&gt;</code> để viết nghiêng.</li>
+            <li>Sử dụng thẻ <code>&lt;code&gt;text&lt;/code&gt;</code> để viết định dạng mã.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

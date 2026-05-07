@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1>Quản Lý Kho Tài Khoản</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('uploadModal').style.display='flex'">+ Thêm Tài Khoản</button>
+</div>
+
+<div class="card">
+    <div style="margin-bottom: 1.5rem;">
+        <form action="/admin/accounts" method="get" style="display: flex; gap: 10px; align-items: center;">
+            <select name="product_id" style="padding: 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg); color: white;">
+                <option value="">-- Tất cả sản phẩm --</option>
+                {% for prod in products %}
+                <option value="{{ prod.id }}" {% if selected_product_id == prod.id %}selected{% endif %}>{{ prod.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="q" value="{{ q or '' }}" placeholder="Tìm theo Mã Tài Khoản..." 
+                   style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg); color: white;">
+            <button type="submit" class="btn btn-primary">Lọc</button>
+        </form>
+        {% if selected_product_id %}
+        <div style="margin-top: 15px;">
+            <form action="/admin/accounts/clear" method="post" onsubmit="return confirm('⚠️ CẢNH BÁO: Bạn có muốn xóa TOÀN BỘ tài khoản CHƯA BÁN của sản phẩm này?')">
+                <input type="hidden" name="product_id" value="{{ selected_product_id }}">
+                <button type="submit" class="btn" style="background: #e74c3c; color: white; padding: 6px 12px; font-size: 0.85rem; border: none; border-radius: 4px; cursor: pointer;">🗑️ Xóa tồn kho chưa bán</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Sản Phẩm</th>
+                <th>Thông Tin Tài Khoản</th>
+                <th>Trạng Thái</th>
+                <th>Ngày Bán</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for acc in accounts %}
+            <tr>
+                <td>{{ acc.id }}</td>
+                <td>{{ acc.product.name }}</td>
+                <td><code>{{ acc.credentials }}</code></td>
+                <td>
+                    <span class="badge {% if not acc.is_sold %}badge-success{% else %}badge-pending{% endif %}">
+                        {% if not acc.is_sold %}CÒN HÀNG{% else %}ĐÃ BÁN{% endif %}
+                    </span>
+                </td>
+                <td>{{ acc.sold_at.strftime('%H:%M %d/%m/%Y') if acc.sold_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; z-index:1000;">
+    <div class="card" style="width:100%; max-width:600px;">
+        <h2>Thêm Tài Khoản Theo Lô</h2>
+        <form action="/admin/accounts/upload" method="post">
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Sản Phẩm</label>
+                <select name="product_id" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box;">
+                    {% for prod in products %}
+                    <option value="{{ prod.id }}" {% if selected_product_id == prod.id %}selected{% endif %}>{{ prod.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="margin-bottom:1.5rem;">
+                <label style="display:block; margin-bottom:0.5rem; color:var(--text-muted);">Danh sách tài khoản (mỗi dòng 1 tài khoản)</label>
+                <textarea name="data" placeholder="user1|pass1&#10;user2|pass2&#10;code123" required style="width:100%; padding:0.75rem; border-radius:0.5rem; background:var(--bg); border:1px solid var(--border); color:white; box-sizing:border-box; min-height:200px; font-family:monospace;"></textarea>
+            </div>
+            <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                <button type="button" class="btn" onclick="document.getElementById('uploadModal').style.display='none'" style="background:var(--border); color:white;">Hủy</button>
+                <button type="submit" class="btn btn-primary">Tải Lên</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

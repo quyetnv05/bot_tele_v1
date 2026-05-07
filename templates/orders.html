@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Quản Lý Đơn Hàng</h1>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <form action="/admin/orders" method="get" style="display: flex; gap: 10px; align-items: center;">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="Tìm theo Mã Đơn hoặc Mã Tài Khoản..." 
+               style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg); color: white;">
+        <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+        {% if q %}
+        <a href="/admin/orders" class="btn" style="background: var(--border); text-decoration: none;">Xóa lọc</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID Đơn</th>
+                <th>Người Mua</th>
+                <th>Sản Phẩm</th>
+                <th>Số Tiền</th>
+                <th>Thông Tin Đã Giao</th>
+                <th>Ngày Mua</th>
+                <th>Trạng Thái</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>#{{ order.id }}</td>
+                <td>{{ order.user.full_name }} ({{ order.user.telegram_id }})</td>
+                <td>{{ order.product.name }}</td>
+                <td>{{ order.amount | int }}đ</td>
+                <td><code>{{ order.account.credentials if order.account else 'N/A' }}</code></td>
+                <td>{{ order.created_at.strftime('%H:%M %d/%m/%Y') }}</td>
+                <td>
+                    <span class="badge badge-{{ order.status }}">
+                        {{ order.status | upper }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Quản Lý Người Dùng</h1>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Telegram ID</th>
+                <th>Username</th>
+                <th>Họ Tên</th>
+                <th>Số Dư</th>
+                <th>Ngày Tham Gia</th>
+                <th>Admin</th>
+                <th>Thao Tác (Nạp tiền)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td><code>{{ user.telegram_id }}</code></td>
+                <td>@{{ user.username or '-' }}</td>
+                <td>{{ user.full_name }}</td>
+                <td style="font-weight: 600; color: var(--primary);">{{ user.balance | int }}đ</td>
+                <td>{{ user.created_at.strftime('%d/%m/%Y') }}</td>
+                <td>{{ '✅' if user.is_admin else '❌' }}</td>
+                <td>
+                    <form action="/admin/users/topup" method="post" style="display: flex; gap: 5px; align-items: center;">
+                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                        <input type="number" name="amount" placeholder="VND" required 
+                               style="width: 100px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button type="submit" class="btn" style="padding: 4px 10px; font-size: 13px;">Cộng</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

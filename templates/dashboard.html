@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Shop Admin{% endblock %}
+
+{% block content %}
+<h1>Tổng quan</h1>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="card" style="margin-bottom: 0;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">DOANH THU</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.revenue | default(0) | int }}đ</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">ĐƠN HÀNG</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.orders_count | default(0) }}</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">NGƯỜI DÙNG</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.users_count | default(0) }}</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">SẢN PHẨM</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.products_count | default(0) }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Đơn hàng gần đây</h2>
+        <a href="/admin/orders" style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">Xem tất cả</a>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Người dùng</th>
+                <th>Sản phẩm</th>
+                <th>Số tiền</th>
+                <th>Trạng thái</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in recent_orders %}
+            <tr>
+                <td>#{{ order.id }}</td>
+                <td>{{ order.user.full_name }}</td>
+                <td>{{ order.product.name }}</td>
+                <td>{{ order.amount | int }}đ</td>
+                <td>
+                    <span class="badge badge-{{ order.status }}">
+                        {{ order.status | upper }}
+                    </span>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted);">Chưa có đơn hàng nào</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
