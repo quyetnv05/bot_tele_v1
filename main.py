@@ -741,6 +741,7 @@ async def api_buy(
 # --- CMSNT (SHOPCLONEV7) COMPATIBILITY API ---
 
 @app.get("/api/cmsnt/v1/products")
+@app.get("/api/products.php")
 async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends(verify_api_key)):
     products = db.query(Product).filter(Product.is_hidden == False).all()
     result = []
@@ -756,10 +757,13 @@ async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends
     return {"status": "success", "data": result}
 
 @app.get("/api/cmsnt/v1/balance")
+@app.get("/api/profile.php")
 async def cmsnt_api_balance(user: User = Depends(verify_api_key)):
     return {"status": "success", "data": {"balance": user.balance}}
 
 @app.post("/api/cmsnt/v1/buy")
+@app.post("/api/buy.php")
+@app.post("/api/order.php")
 async def cmsnt_api_buy(
     request: Request,
     db: Session = Depends(get_db), 
