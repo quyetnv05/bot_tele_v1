@@ -746,8 +746,13 @@ async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends
     result = []
     for p in products:
         if p.is_partner and p.partner_id:
-            from bot.partner_api import partner_api
-            stock = partner_api.stock_history.get(str(p.partner_id), 0)
+            try:
+                import json
+                with open("partner_stock_cache.json", "r") as f:
+                    stock_cache = json.load(f)
+                stock = stock_cache.get(str(p.partner_id), 0)
+            except Exception:
+                stock = 0
         else:
             stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
         result.append({
@@ -767,8 +772,13 @@ async def raw_cmsnt_products(db: Session = Depends(get_db), user: User = Depends
     result = []
     for p in products:
         if p.is_partner and p.partner_id:
-            from bot.partner_api import partner_api
-            stock = partner_api.stock_history.get(str(p.partner_id), 0)
+            try:
+                import json
+                with open("partner_stock_cache.json", "r") as f:
+                    stock_cache = json.load(f)
+                stock = stock_cache.get(str(p.partner_id), 0)
+            except Exception:
+                stock = 0
         else:
             stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
         result.append({

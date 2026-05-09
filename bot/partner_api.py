@@ -45,6 +45,13 @@ class PartnerAPIClient:
                                 # Update history
                                 self.stock_history[p_id] = new_stock
                             
+                            try:
+                                import json
+                                with open("partner_stock_cache.json", "w") as f:
+                                    json.dump(self.stock_history, f)
+                            except Exception as e:
+                                logging.error(f"Failed to write stock cache: {e}")
+                                
                             self.products_cache = data
                             data["restocked"] = restocked # Attach to result for task handling
                         return data
