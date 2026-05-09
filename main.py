@@ -741,7 +741,6 @@ async def api_buy(
 # --- CMSNT (SHOPCLONEV7) COMPATIBILITY API ---
 
 @app.get("/api/cmsnt/v1/products")
-@app.get("/api/products.php")
 async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends(verify_api_key)):
     products = db.query(Product).filter(Product.is_hidden == False).all()
     result = []
@@ -758,10 +757,37 @@ async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends
         })
     return {"status": True, "success": True, "data": result}
 
+@app.get("/api/products.php")
+async def raw_cmsnt_products(db: Session = Depends(get_db), user: User = Depends(verify_api_key)):
+    products = db.query(Product).filter(Product.is_hidden == False).all()
+    result = []
+    for p in products:
+        stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+        result.append({
+            "id": str(p.id),
+            "name": p.name,
+            "description": p.description or "",
+            "content": p.description or "",
+            "price": str(p.price),
+            "stock": str(stock),
+            "amount": str(stock)
+        })
+    # ShopCloneV7 usually expects a flat array
+    return result
+
 @app.get("/api/cmsnt/v1/balance")
-@app.get("/api/profile.php")
 async def cmsnt_api_balance(user: User = Depends(verify_api_key)):
     return {"status": True, "success": True, "data": {"balance": user.balance}, "info": {"balance": user.balance}}
+
+@app.get("/api/profile.php")
+async def raw_cmsnt_profile(user: User = Depends(verify_api_key)):
+    # ShopCloneV7 expects flat object with username and balance
+    return {
+        "status": True,
+        "username": str(user.id),
+        "balance": str(user.balance),
+        "money": str(user.balance)
+    }
 
 @app.post("/api/cmsnt/v1/buy")
 @app.post("/api/buy.php")
