@@ -786,19 +786,15 @@ async def raw_cmsnt_products(db: Session = Depends(get_db), user: User = Depends
             "name": p.name,
             "description": p.description or "",
             "content": p.description or "",
-            "price": str(p.price),
-            "stock": str(stock),
-            "amount": str(stock)
+            "price": int(p.price),
+            "stock": int(stock),
+            "amount": int(stock)
         })
-    # Debug logging to see exactly what is being returned to the partner
-    print(f"[DEBUG API PRODUCTS] Returning {len(result)} products to partner. First product: {result[0] if result else 'None'}")
+    # Debug logging
+    print(f"[DEBUG API PRODUCTS] Returning {len(result)} products as FLAT ARRAY. First: {result[0] if result else 'None'}")
     
-    # ShopCloneV7 usually expects a wrapped success status
-    return {
-        "status": "success",
-        "success": True,
-        "data": result
-    }
+    # Return flat array directly for maximum compatibility with ShopCloneV7
+    return result
 
 @app.get("/api/cmsnt/v1/balance")
 async def cmsnt_api_balance(user: User = Depends(verify_api_key)):
