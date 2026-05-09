@@ -639,10 +639,16 @@ async def sepay_webhook(request: Request, db: Session = Depends(get_db)):
 # --- PUBLIC API V1 ---
 from fastapi import Header
 
-async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key"), db: Session = Depends(get_db)):
-    if not x_api_key:
-        raise HTTPException(status_code=401, detail="X-API-Key header is missing")
-    user = db.query(User).filter(User.api_key == x_api_key).first()
+async def verify_api_key(
+    x_api_key: str = Header(None, alias="X-API-Key"), 
+    api_key: str = None,
+    db: Session = Depends(get_db)
+):
+    # Check header first, then query parameter
+    key_to_check = x_api_key or api_key
+    if not key_to_check:
+        raise HTTPException(status_code=401, detail="API Key is missing (Header X-API-Key or query param api_key)")
+    user = db.query(User).filter(User.api_key == key_to_check).first()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid API Key")
     return user
