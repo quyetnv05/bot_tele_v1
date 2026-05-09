@@ -29,10 +29,20 @@ def get_categories_keyboard(categories):
         builder.inline_keyboard.append([InlineKeyboardButton(text=cat.name, callback_data=f"cat_{cat.id}")])
     return builder
 
-def get_products_keyboard(products):
+def get_products_keyboard(products_with_stock):
     builder = InlineKeyboardMarkup(inline_keyboard=[])
-    for prod in products:
-        builder.inline_keyboard.append([InlineKeyboardButton(text=f"{prod.name} - {prod.price}đ", callback_data=f"prod_{prod.id}")])
+    for p in products_with_stock:
+        # p is a dict or object with: id, name, price, stock
+        stock = p.get('stock', 0)
+        name = p.get('name', 'N/A')
+        price = p.get('price', 0)
+        prod_id = p.get('id')
+        
+        display_name = f"{name} - {price:,.0f}đ"
+        if stock <= 0:
+            display_name = f"🔴 [HẾT HÀNG] {name}"
+            
+        builder.inline_keyboard.append([InlineKeyboardButton(text=display_name, callback_data=f"prod_{prod_id}")])
     builder.inline_keyboard.append([InlineKeyboardButton(text="🔙 Quay Lại", callback_data="back_to_cats")])
     return builder
 

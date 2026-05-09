@@ -32,7 +32,7 @@
                 <td>{{ prod.price | int }}đ</td>
                 <td>
                     {% set available = prod.accounts | selectattr("is_sold", "equalto", false) | list | length %}
-                    <span class="badge {% if available > 0 %}badge-success{% else %}badge-pending{% endif %}">
+                    <span class="badge {% if available > 0 %}badge-success{% else %}badge-danger{% endif %}">
                         {{ available }}
                     </span>
                 </td>

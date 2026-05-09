@@ -217,7 +217,28 @@ async def category_callback(callback: CallbackQuery):
             await callback.answer("Danh mục này hiện chưa có sản phẩm.")
             return
             
-        await callback.message.edit_text("Các sản phẩm trong danh mục này:", reply_markup=get_products_keyboard(products))
+        # Enrich products with stock info
+        enriched_prods = []
+        partner_data = partner_api.products_cache
+        
+        for p in products:
+            stock = 0
+            if p.is_partner:
+                if partner_data and "products" in partner_data:
+                    p_info = next((item for item in partner_data["products"] if item["id"] == p.partner_id), None)
+                    if p_info:
+                        stock = p_info.get("stock", 0)
+            else:
+                stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+            
+            enriched_prods.append({
+                "id": p.id,
+                "name": p.name,
+                "price": p.price, # Keyboard will use this or we can pass markup price
+                "stock": stock
+            })
+            
+        await callback.message.edit_text("Các sản phẩm trong danh mục này:", reply_markup=get_products_keyboard(enriched_prods))
 
 @dp.callback_query(F.data.startswith("prod_"))
 async def product_callback(callback: CallbackQuery):
@@ -249,14 +270,23 @@ async def product_callback(callback: CallbackQuery):
                 
         vip_price = original_price * (1 - discount / 100)
         
+        stock_text = f" Tồn kho: <b>{available_count}</b>"
+        if available_count <= 0:
+            stock_text = " Tồn kho: 🔴 <b>HẾT HÀNG</b>"
+            
         product_text = (
             f"📦 <b>{product.name}</b>\n\n"
             f"📝 Mô tả: {product.description or 'Chưa có mô tả'}\n"
             f"💰 Giá gốc: <s>{original_price:,.0f}đ</s>\n"
             f"🌟 Giá {tier_name}: <b>{vip_price:,.0f}đ</b> (Giảm {discount}%)\n"
-            f" Tồn kho: <b>{available_count}</b>\n\n"
-            "<i>Nhấn nút bên dưới để tiến hành mua hàng.</i>"
+            f"{stock_text}\n\n"
         )
+        
+        if available_count <= 0:
+            product_text += "🔴 <b>HIỆN ĐANG HẾT HÀNG</b>\n<i>Vui lòng quay lại sau hoặc chọn sản phẩm khác.</i>"
+        else:
+            product_text += "<i>Nhấn nút bên dưới để tiến hành mua hàng.</i>"
+
         await callback.message.edit_text(
             product_text, 
             reply_markup=get_product_detail_keyboard(product.id), 
@@ -766,9 +796,30 @@ async def show_categories_callback(callback: CallbackQuery):
         if not products:
             await callback.answer("Danh mục này hiện chưa có sản phẩm.", show_alert=True)
         else:
+            # Enrich products with stock info
+            enriched_prods = []
+            partner_data = partner_api.products_cache
+            
+            for p in products:
+                stock = 0
+                if p.is_partner:
+                    if partner_data and "products" in partner_data:
+                        p_info = next((item for item in partner_data["products"] if item["id"] == p.partner_id), None)
+                        if p_info:
+                            stock = p_info.get("stock", 0)
+                else:
+                    stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+                
+                enriched_prods.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "price": p.price,
+                    "stock": stock
+                })
+
             await callback.message.edit_text(
                 f"📂 Danh mục: <b>{cat.name}</b>\n\n<i>Vui lòng chọn sản phẩm bạn muốn mua:</i>", 
-                reply_markup=get_products_keyboard(products), 
+                reply_markup=get_products_keyboard(enriched_prods), 
                 parse_mode="HTML"
             )
     else:
