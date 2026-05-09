@@ -745,7 +745,11 @@ async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends
     products = db.query(Product).filter(Product.is_hidden == False).all()
     result = []
     for p in products:
-        stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+        if p.is_partner and p.partner_id:
+            from bot.partner_api import partner_api
+            stock = partner_api.stock_history.get(str(p.partner_id), 0)
+        else:
+            stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
         result.append({
             "id": p.id,
             "name": p.name,
@@ -762,7 +766,11 @@ async def raw_cmsnt_products(db: Session = Depends(get_db), user: User = Depends
     products = db.query(Product).filter(Product.is_hidden == False).all()
     result = []
     for p in products:
-        stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+        if p.is_partner and p.partner_id:
+            from bot.partner_api import partner_api
+            stock = partner_api.stock_history.get(str(p.partner_id), 0)
+        else:
+            stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
         result.append({
             "id": str(p.id),
             "name": p.name,
