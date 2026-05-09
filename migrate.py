@@ -34,6 +34,11 @@ if os.path.exists(db_path):
             cursor.execute("ALTER TABLE users ADD COLUMN referred_by_id INTEGER")
             print("Successfully added referred_by_id column.")
         except: print("Column referred_by_id may already exist.")
+        
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN api_key TEXT")
+            print("Successfully added api_key column.")
+        except: print("Column api_key may already exist.")
         # 4. Add reseller fields to products
         print("Adding reseller fields to products table...")
         columns_to_add = [

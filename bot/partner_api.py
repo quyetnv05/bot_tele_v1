@@ -6,6 +6,8 @@ import asyncio
 
 class PartnerAPIClient:
     def __init__(self):
+        from dotenv import load_dotenv
+        load_dotenv()
         self.base_url = "http://node12.zampto.net:20291/api"
         self.api_key = os.getenv("PARTNER_API_KEY")
         self.headers = {"X-API-Key": self.api_key or ""}
@@ -58,6 +60,13 @@ class PartnerAPIClient:
                     return await response.json()
         except Exception: return {"success": False}
 
+    async def get_health(self):
+        try:
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                async with session.get(f"{self.base_url}/health", timeout=10) as response:
+                    return await response.json()
+        except Exception: return {"success": False, "message": "API is unreachable"}
+
     async def buy_product(self, product_id: str, quantity: int = 1):
         payload = {"product_id": product_id, "quantity": quantity}
         try:
@@ -65,5 +74,10 @@ class PartnerAPIClient:
                 async with session.post(f"{self.base_url}/buy", json=payload, timeout=30) as response:
                     return await response.json()
         except Exception: return {"success": False}
+
+    async def close(self):
+        # Placeholder for cleanup if needed. 
+        # Currently each method uses its own session via 'async with'.
+        pass
 
 partner_api = PartnerAPIClient()

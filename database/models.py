@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -8,13 +8,15 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(Integer, unique=True, index=True)
+    telegram_id = Column(BigInteger, unique=True, index=True)
     username = Column(String, nullable=True)
     full_name = Column(String, nullable=True)
     balance = Column(Float, default=0.0)
     is_admin = Column(Boolean, default=False)
     referral_code = Column(String, unique=True, nullable=True)
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    api_key = Column(String, unique=True, nullable=True, index=True)
+    commission_rate = Column(Float, nullable=True) # Individual commission rate
     created_at = Column(DateTime, default=datetime.now)
 
     orders = relationship("Order", back_populates="user")
@@ -98,3 +100,10 @@ class Transaction(Base):
     created_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User", back_populates="transactions")
+
+class Setting(Base):
+    __tablename__ = "settings"
+    id = Column(Integer, primary_key=True)
+    key = Column(String, unique=True, index=True)
+    value = Column(String)
+

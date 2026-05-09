@@ -6,10 +6,25 @@
 <h1>Tổng quan</h1>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-    <div class="card" style="margin-bottom: 0;">
-        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">DOANH THU</h3>
-        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.revenue | default(0) | int }}đ</p>
+    <div class="card" style="margin-bottom: 0; border-left: 4px solid var(--primary);">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">DOANH THU HÔM NAY</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ "{:,.0f}".format(stats.revenue_today | default(0)) }}đ</p>
     </div>
+    <div class="card" style="margin-bottom: 0; border-left: 4px solid #1cc88a;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">DOANH THU TUẦN</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ "{:,.0f}".format(stats.revenue_week | default(0)) }}đ</p>
+    </div>
+    <div class="card" style="margin-bottom: 0; border-left: 4px solid #36b9cc;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">DOANH THU THÁNG</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ "{:,.0f}".format(stats.revenue_month | default(0)) }}đ</p>
+    </div>
+    <div class="card" style="margin-bottom: 0; border-left: 4px solid #f6c23e;">
+        <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">TỔNG DOANH THU</h3>
+        <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ "{:,.0f}".format(stats.revenue_total | default(0)) }}đ</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
     <div class="card" style="margin-bottom: 0;">
         <h3 style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0;">ĐƠN HÀNG</h3>
         <p style="font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0;">{{ stats.orders_count | default(0) }}</p>

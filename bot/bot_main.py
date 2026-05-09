@@ -2,12 +2,13 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, URLInputFile
+from aiogram.types import Message, CallbackQuery, URLInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 import time
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 import sys
 import os
+import secrets
 from datetime import datetime
 
 # Add project root to path
@@ -15,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import config
 from database.db import SessionLocal
-from database.models import User, Category, Product, Transaction, Order, Account, Voucher
+from database.models import User, Category, Product, Transaction, Order, Account, Voucher, Setting
 from bot.keyboards import get_main_menu, get_categories_keyboard, get_products_keyboard, get_product_detail_keyboard, get_direct_payment_keyboard, get_welcome_inline_keyboard
 from bot.partner_api import partner_api
 
@@ -38,7 +39,8 @@ class MaintenanceMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.exceptions import TelegramNetworkError
+from aiogram.exceptions import TelegramNetworkError, TelegramForbiddenError
+from aiogram.types import ErrorEvent
 
 # Increase timeout to 120 seconds to handle slow network connections
 session = AiohttpSession(timeout=120)
@@ -46,6 +48,16 @@ bot = Bot(token=config.TELEGRAM_BOT_TOKEN, session=session)
 dp = Dispatcher()
 dp.message.outer_middleware(MaintenanceMiddleware())
 dp.callback_query.outer_middleware(MaintenanceMiddleware())
+
+@dp.error()
+async def error_handler(event: ErrorEvent):
+    if isinstance(event.exception, TelegramForbiddenError):
+        user_id = "Unknown"
+        if event.update.message: user_id = event.update.message.from_user.id
+        elif event.update.callback_query: user_id = event.update.callback_query.from_user.id
+        logger.warning(f"Bot blocked by user {user_id}. Ignoring update.")
+        return True # Handled, stop propagation
+    return False
 
 async def set_commands():
     commands = [
@@ -412,7 +424,14 @@ def process_commission(db: Session, user: User, amount: float):
     if user.referred_by_id:
         referrer = db.query(User).filter(User.id == user.referred_by_id).first()
         if referrer:
-            commission = amount * (config.AFFILIATE_PERCENT / 100)
+            # Priority: Individual Rate > Global Setting
+            if referrer.commission_rate is not None:
+                affiliate_percent = referrer.commission_rate
+            else:
+                aff_setting = db.query(Setting).filter(Setting.key == "affiliate_percent").first()
+                affiliate_percent = float(aff_setting.value) if aff_setting else config.AFFILIATE_PERCENT
+            
+            commission = amount * (affiliate_percent / 100)
             if commission > 0:
                 referrer.balance += commission
                 logger.info(f"Commission of {commission} credited to {referrer.username} for purchase by {user.username}")
@@ -780,8 +799,52 @@ async def show_support_callback(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "show_api_key")
 async def show_api_key_callback(callback: CallbackQuery):
-    await callback.message.answer("📡 <b>API Key</b>\n\nTính năng này đang được phát triển. Vui lòng quay lại sau!", parse_mode="HTML")
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer("Vui lòng gõ /start để bắt đầu.")
+            return
+            
+        if user.api_key:
+            text = (
+                "📡 <b>Thông tin API của bạn</b>\n\n"
+                f"🔑 API Key: <code>{user.api_key}</code>\n\n"
+                "⚠️ <b>Lưu ý:</b> Tuyệt đối không chia sẻ API Key này cho người khác. "
+                "Bạn có thể dùng key này để tích hợp vào bot bán hàng của riêng mình."
+            )
+            buttons = [[InlineKeyboardButton(text="🔄 Cấp lại Key mới", callback_data="gen_api_key")]]
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            text = (
+                "📡 <b>API Key</b>\n\n"
+                "Bạn chưa có API Key. Nhấn nút bên dưới để tạo mới."
+            )
+            buttons = [[InlineKeyboardButton(text="🆕 Tạo API Key", callback_data="gen_api_key")]]
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
+
+@dp.callback_query(F.data == "gen_api_key")
+async def generate_api_key_callback(callback: CallbackQuery):
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
+        if not user:
+            await callback.answer("Vui lòng gõ /start để bắt đầu.")
+            return
+            
+        # Generate new key
+        new_key = f"sk_{secrets.token_hex(16)}"
+        user.api_key = new_key
+        db.commit()
+        
+        text = (
+            "✅ <b>Đã tạo API Key thành công!</b>\n\n"
+            f"🔑 API Key của bạn:\n<code>{new_key}</code>\n\n"
+            "Hãy lưu trữ cẩn thận!"
+        )
+        await callback.message.edit_text(text, parse_mode="HTML")
+    await callback.answer("Đã cập nhật API Key!")
 
 @dp.callback_query(F.data == "show_language")
 async def show_language_callback(callback: CallbackQuery):
@@ -937,7 +1000,14 @@ async def sepay_polling_task():
                                         if user.referred_by_id:
                                             referrer = db.query(User).filter(User.id == user.referred_by_id).first()
                                             if referrer:
-                                                commission = pt.amount * (config.AFFILIATE_PERCENT / 100)
+                                                # Priority: Individual Rate > Global Setting
+                                                if referrer.commission_rate is not None:
+                                                    affiliate_percent = referrer.commission_rate
+                                                else:
+                                                    aff_setting = db.query(Setting).filter(Setting.key == "affiliate_percent").first()
+                                                    affiliate_percent = float(aff_setting.value) if aff_setting else config.AFFILIATE_PERCENT
+                                                
+                                                commission = pt.amount * (affiliate_percent / 100)
                                                 if commission > 0:
                                                     referrer.balance += commission
                                                     db.commit()
@@ -977,7 +1047,13 @@ async def sepay_polling_task():
                                     try: await bot.send_message(user.telegram_id, msg, parse_mode="HTML")
                                     except: pass
                                 
-                                db.commit()
+                                try:
+                                    db.commit()
+                                    logger.info(f"Transaction {pt.reference_code} committed successfully.")
+                                except Exception as commit_err:
+                                    db.rollback()
+                                    logger.error(f"Failed to commit transaction {pt.reference_code}: {commit_err}")
+                                    
                                 break
         except Exception as e:
             logger.error(f"SePay Polling Error: {e}")

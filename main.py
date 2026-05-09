@@ -5,13 +5,14 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import os
+import secrets
 from database.db import get_db, init_db
-from database.models import Transaction, Order, User, Account, Product, Category, Voucher
+from database.models import Transaction, Order, User, Account, Product, Category, Voucher, Setting
 from config import config
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
@@ -29,6 +30,49 @@ def get_current_admin(request: Request):
 @app.on_event("startup")
 def startup_event():
     init_db()
+    # Initialize default settings if not exists
+    from database.db import SessionLocal
+    with SessionLocal() as db:
+        if not db.query(Setting).filter(Setting.key == "affiliate_percent").first():
+            db.add(Setting(key="affiliate_percent", value=str(config.AFFILIATE_PERCENT)))
+            db.commit()
+
+def get_setting(db: Session, key: str, default: str = None):
+    setting = db.query(Setting).filter(Setting.key == key).first()
+    return setting.value if setting else default
+
+async def process_affiliate_commission(db: Session, user: User, amount: float):
+    if not user.referred_by_id:
+        return 0
+        
+    referrer = db.query(User).filter(User.id == user.referred_by_id).first()
+    if not referrer:
+        return 0
+        
+    # Check for individual rate first, then fallback to global setting
+    if referrer.commission_rate is not None:
+        affiliate_percent = referrer.commission_rate
+    else:
+        affiliate_percent = float(get_setting(db, "affiliate_percent", str(config.AFFILIATE_PERCENT)))
+        
+    if affiliate_percent > 0:
+        commission = amount * (affiliate_percent / 100)
+        referrer.balance += commission
+        db.commit()
+            
+        # Notify referrer
+        try:
+            from aiogram import Bot
+            bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
+            await bot.send_message(
+                referrer.telegram_id, 
+                f"💰 <b>Hoa hồng mới!</b>\n\nBạn được cộng <b>{commission:,.0f}đ</b> từ đơn hàng của bạn bè.\nSố dư hiện tại: <b>{referrer.balance:,.0f}đ</b>", 
+                parse_mode="HTML"
+            )
+            await bot.session.close()
+        except: pass
+        return commission
+    return 0
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -62,9 +106,17 @@ async def admin_root():
 async def admin_dashboard(request: Request, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     if not admin: return RedirectResponse(url="/login")
     
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=now.weekday())
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
     # Stats calculation
     stats = {
-        "revenue": db.query(func.sum(Order.amount)).filter(Order.status == "completed").scalar() or 0,
+        "revenue_total": db.query(func.sum(Order.amount)).filter(Order.status == "completed").scalar() or 0,
+        "revenue_today": db.query(func.sum(Order.amount)).filter(Order.status == "completed", Order.created_at >= today_start).scalar() or 0,
+        "revenue_week": db.query(func.sum(Order.amount)).filter(Order.status == "completed", Order.created_at >= week_start).scalar() or 0,
+        "revenue_month": db.query(func.sum(Order.amount)).filter(Order.status == "completed", Order.created_at >= month_start).scalar() or 0,
         "orders_count": db.query(Order).filter(Order.status == "completed").count(),
         "users_count": db.query(User).count(),
         "products_count": db.query(Product).count(),
@@ -233,9 +285,37 @@ async def add_product(
     db.commit()
     return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
 
-    db.add(prod)
-    db.commit()
     return RedirectResponse(url="/admin/products", status_code=status.HTTP_303_SEE_OTHER)
+
+# --- SETTINGS ROUTES ---
+@app.get("/admin/settings", response_class=HTMLResponse)
+async def admin_settings(request: Request, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    if not admin: return RedirectResponse(url="/login")
+    
+    affiliate_percent = get_setting(db, "affiliate_percent", str(config.AFFILIATE_PERCENT))
+    
+    return templates.TemplateResponse(request=request, name="settings.html", context={
+        "affiliate_percent": affiliate_percent,
+        "active_page": "settings"
+    })
+
+@app.post("/admin/settings")
+async def update_settings(
+    affiliate_percent: str = Form(...),
+    db: Session = Depends(get_db), 
+    admin = Depends(get_current_admin)
+):
+    if not admin: return RedirectResponse(url="/login")
+    
+    setting = db.query(Setting).filter(Setting.key == "affiliate_percent").first()
+    if not setting:
+        setting = Setting(key="affiliate_percent", value=affiliate_percent)
+        db.add(setting)
+    else:
+        setting.value = affiliate_percent
+        
+    db.commit()
+    return RedirectResponse(url="/admin/settings?success=1", status_code=status.HTTP_303_SEE_OTHER)
 
 # --- ACCOUNT ROUTES ---
 @app.get("/admin/accounts", response_class=HTMLResponse)
@@ -380,6 +460,38 @@ async def topup_user(
             
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
 
+@app.post("/admin/users/{user_id}/set-commission")
+async def set_user_commission(
+    user_id: int, 
+    commission_rate: float = Form(None), 
+    db: Session = Depends(get_db), 
+    admin = Depends(get_current_admin)
+):
+    if not admin: return RedirectResponse(url="/login")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.commission_rate = commission_rate
+        db.commit()
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/admin/users/{user_id}/generate-api-key")
+async def generate_api_key(user_id: int, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    if not admin: return RedirectResponse(url="/login")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.api_key = f"sk_{secrets.token_hex(16)}"
+        db.commit()
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/admin/users/{user_id}/revoke-api-key")
+async def revoke_api_key(user_id: int, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    if not admin: return RedirectResponse(url="/login")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.api_key = None
+        db.commit()
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
 @app.post("/webhook/sepay")
 async def sepay_webhook(request: Request, db: Session = Depends(get_db)):
     """
@@ -445,13 +557,8 @@ async def sepay_webhook(request: Request, db: Session = Depends(get_db)):
                 
                 # Affiliate commission for direct purchase
                 if user.referred_by_id:
-                    referrer = db.query(User).filter(User.id == user.referred_by_id).first()
-                    if referrer:
-                        commission = transaction.amount * (config.AFFILIATE_PERCENT / 100)
-                        if commission > 0:
-                            referrer.balance += commission
-                            db.commit()
-                            # Notify referrer via bot (it will be used below)
+                    # Commission is processed inside notify block or here
+                    pass
                 
                 # Notify user via bot
                 try:
@@ -469,16 +576,7 @@ async def sepay_webhook(request: Request, db: Session = Depends(get_db)):
                     
                     # Notify referrer if applicable
                     if user.referred_by_id:
-                        referrer = db.query(User).filter(User.id == user.referred_by_id).first()
-                        if referrer:
-                            commission = transaction.amount * (config.AFFILIATE_PERCENT / 100)
-                            try:
-                                await bot.send_message(
-                                    referrer.telegram_id, 
-                                    f"💰 <b>Hoa hồng mới!</b>\n\nBạn được cộng <b>{commission:,.0f}đ</b> từ đơn hàng của bạn bè.\nSố dư hiện tại: <b>{referrer.balance:,.0f}đ</b>", 
-                                    parse_mode="HTML"
-                                )
-                            except: pass
+                        await process_affiliate_commission(db, user, transaction.amount)
 
                     # Delete QR message if exists
                     if transaction.qr_message_id:
@@ -538,4 +636,184 @@ async def sepay_webhook(request: Request, db: Session = Depends(get_db)):
         logger.error(f"Error processing webhook: {e}")
         return JSONResponse(content={"success": False, "message": str(e)}, status_code=500)
 
-# Add more API routes for Web Admin here
+# --- PUBLIC API V1 ---
+from fastapi import Header
+
+async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key"), db: Session = Depends(get_db)):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="X-API-Key header is missing")
+    user = db.query(User).filter(User.api_key == x_api_key).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+    return user
+
+@app.get("/api/v1/health")
+async def api_health():
+    return {"success": True, "message": "API is running"}
+
+@app.get("/api/v1/balance")
+async def api_balance(user: User = Depends(verify_api_key)):
+    return {"success": True, "balance": user.balance}
+
+@app.get("/api/v1/products")
+async def api_products(db: Session = Depends(get_db), user: User = Depends(verify_api_key)):
+    products = db.query(Product).filter(Product.is_hidden == False).all()
+    result = []
+    for p in products:
+        stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "price": p.price,
+            "stock": stock
+        })
+    return {"success": True, "products": result}
+
+@app.post("/api/v1/buy")
+async def api_buy(
+    request: Request,
+    db: Session = Depends(get_db), 
+    user: User = Depends(verify_api_key)
+):
+    try:
+        data = await request.json()
+        product_id = data.get("product_id")
+        quantity = data.get("quantity", 1)
+        
+        if not product_id:
+            return JSONResponse(content={"success": False, "message": "product_id is required"}, status_code=400)
+        
+        product = db.query(Product).filter(Product.id == product_id, Product.is_hidden == False).first()
+        if not product:
+            return JSONResponse(content={"success": False, "message": "Product not found"}, status_code=404)
+        
+        total_cost = product.price * quantity
+        if user.balance < total_cost:
+            return JSONResponse(content={"success": False, "message": "Insufficient balance"}, status_code=400)
+        
+        # Get available accounts
+        accounts = db.query(Account).filter(Account.product_id == product_id, Account.is_sold == False).limit(quantity).all()
+        if len(accounts) < quantity:
+            return JSONResponse(content={"success": False, "message": "Not enough stock"}, status_code=400)
+        
+        # Process purchase
+        user.balance -= total_cost
+        credentials = []
+        for acc in accounts:
+            acc.is_sold = True
+            acc.sold_at = datetime.utcnow()
+            credentials.append(acc.credentials)
+            
+            order = Order(
+                user_id=user.id,
+                product_id=product.id,
+                account_id=acc.id,
+                amount=product.price,
+                status="completed"
+            )
+            db.add(order)
+        
+        db.commit()
+        
+        # Affiliate commission for API purchase
+        await process_affiliate_commission(db, user, total_cost)
+        
+        return {
+            "success": True, 
+            "message": "Purchase successful",
+            "product_name": product.name,
+            "quantity": quantity,
+            "amount": total_cost,
+            "credentials": credentials
+        }
+        
+    except Exception as e:
+        logger.error(f"API Buy Error: {e}")
+        return JSONResponse(content={"success": False, "message": str(e)}, status_code=500)
+
+# --- CMSNT (SHOPCLONEV7) COMPATIBILITY API ---
+
+@app.get("/api/cmsnt/v1/products")
+async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends(verify_api_key)):
+    products = db.query(Product).filter(Product.is_hidden == False).all()
+    result = []
+    for p in products:
+        stock = db.query(Account).filter(Account.product_id == p.id, Account.is_sold == False).count()
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "price": p.price,
+            "stock": stock
+        })
+    return {"status": "success", "data": result}
+
+@app.get("/api/cmsnt/v1/balance")
+async def cmsnt_api_balance(user: User = Depends(verify_api_key)):
+    return {"status": "success", "data": {"balance": user.balance}}
+
+@app.post("/api/cmsnt/v1/buy")
+async def cmsnt_api_buy(
+    request: Request,
+    db: Session = Depends(get_db), 
+    user: User = Depends(verify_api_key)
+):
+    try:
+        data = await request.json()
+        product_id = data.get("product_id")
+        quantity = data.get("quantity", 1)
+        
+        if not product_id:
+            return JSONResponse(content={"status": "error", "message": "product_id is required"}, status_code=400)
+        
+        product = db.query(Product).filter(Product.id == product_id, Product.is_hidden == False).first()
+        if not product:
+            return JSONResponse(content={"status": "error", "message": "Product not found"}, status_code=404)
+        
+        total_cost = product.price * quantity
+        if user.balance < total_cost:
+            return JSONResponse(content={"status": "error", "message": "Insufficient balance"}, status_code=400)
+        
+        # Get available accounts
+        accounts = db.query(Account).filter(Account.product_id == product_id, Account.is_sold == False).limit(quantity).all()
+        if len(accounts) < quantity:
+            return JSONResponse(content={"status": "error", "message": "Not enough stock"}, status_code=400)
+        
+        # Process purchase
+        user.balance -= total_cost
+        credentials = []
+        for acc in accounts:
+            acc.is_sold = True
+            acc.sold_at = datetime.utcnow()
+            credentials.append(acc.credentials)
+            
+            order = Order(
+                user_id=user.id,
+                product_id=product.id,
+                account_id=acc.id,
+                amount=product.price,
+                status="completed"
+            )
+            db.add(order)
+        
+        db.commit()
+        
+        # Affiliate commission for CMSNT API purchase
+        await process_affiliate_commission(db, user, total_cost)
+        
+        return {
+            "status": "success", 
+            "message": "Purchase successful",
+            "data": {
+                "order_id": order.id,
+                "product_name": product.name,
+                "quantity": quantity,
+                "amount": total_cost,
+                "products": credentials
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"CMSNT API Buy Error: {e}")
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)

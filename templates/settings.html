@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Cấu hình hệ thống{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Cấu hình hệ thống</h1>
+
+    {% if request.query_params.get('success') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>Thành công!</strong> Các thay đổi đã được lưu lại.
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Cấu hình Cộng tác viên (CTV)</h6>
+                </div>
+                <div class="card-body">
+                    <form action="/admin/settings" method="POST">
+                        <div class="form-group">
+                            <label for="affiliate_percent">Phần trăm hoa hồng CTV (%)</label>
+                            <div class="input-group">
+                                <input type="number" step="0.1" class="form-control" id="affiliate_percent" name="affiliate_percent" value="{{ affiliate_percent }}" required>
+                                <div class="input-group-append">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Mức hoa hồng này sẽ được áp dụng cho cả đơn hàng bot và đơn hàng qua API.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-icon-split">
+                            <span class="icon text-white-50">
+                                <i class="fas fa-save"></i>
+                            </span>
+                            <span class="text">Lưu cấu hình</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Thông tin khác</h6>
+                </div>
+                <div class="card-body">
+                    <p>Hệ thống hiện tại đang sử dụng các cấu hình mặc định từ file <code>.env</code>. Để thay đổi các thông số kỹ thuật (Bot Token, API Keys), vui lòng chỉnh sửa trực tiếp trong file cấu hình.</p>
+                    <p>Trang này chỉ dành cho các cài đặt nghiệp vụ có thể thay đổi thường xuyên.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
