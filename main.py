@@ -751,15 +751,17 @@ async def cmsnt_api_products(db: Session = Depends(get_db), user: User = Depends
             "id": p.id,
             "name": p.name,
             "description": p.description,
+            "content": p.description,
             "price": p.price,
-            "stock": stock
+            "stock": stock,
+            "amount": stock
         })
-    return {"status": "success", "data": result}
+    return {"status": True, "success": True, "data": result}
 
 @app.get("/api/cmsnt/v1/balance")
 @app.get("/api/profile.php")
 async def cmsnt_api_balance(user: User = Depends(verify_api_key)):
-    return {"status": "success", "data": {"balance": user.balance}}
+    return {"status": True, "success": True, "data": {"balance": user.balance}, "info": {"balance": user.balance}}
 
 @app.post("/api/cmsnt/v1/buy")
 @app.post("/api/buy.php")
